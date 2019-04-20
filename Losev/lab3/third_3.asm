@@ -122,6 +122,7 @@ AVL_MEM_PROC PROC NEAR
 		mov ah, 04Ah
 		mov bx, 0FFFFh
 		int 21h
+		inc bx				; 1 paragraph for MCB
 		mov ax, 10h
 		mul bx
 		mov si, offset AVL_MEM

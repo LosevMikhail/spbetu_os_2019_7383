@@ -249,26 +249,11 @@ PRINT_MCB_TABLE ENDP
 
 ;--------------------------------------------------
 BEGIN:
+		
 		call AVL_MEM_PROC
 		call EXTENDED_MEM_PROC
-		;call PRINT_MCB_TABLE
-		
-		mov ax, offset END_OF_PROGRAMM		; get program size, bytes
-		mov bx, ax
-		and bx, 0Fh
-		cmp bx, 0h
-		je size_multiple_of_10h				; if round up is not needed
-		add ax, 0fh							; for round up
-	size_multiple_of_10h:
-		mov bl, 10h
-		div bl								
-		mov bl, al
-		mov ah, 4ah
-		int 21h
-		
 		call PRINT_MCB_TABLE
-		
-; ВЫХОД В DOS
+
 		xor AL,AL
 		mov AH,4Ch
 		int 21H
