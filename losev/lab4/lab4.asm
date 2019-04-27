@@ -1,7 +1,3 @@
-AStack SEGMENT STACK
-	dw 16 dup (?)
-AStack ENDS
-
 CODE SEGMENT
 	ASSUME CS:CODE, DS:DATA, SS:AStack
 ; start of resident program
@@ -17,7 +13,7 @@ CODE SEGMENT
 		COUNTER			dw 0
 		COUNT_MESSAGE	db 'ROUT CALLED:    $'
 		ROUT_STACK 		dw 64 dup (?)			;Стек для резидента
-		stack_ptr		=$
+		stack_top		=$
 
 		
 TETR_TO_HEX PROC near
@@ -113,13 +109,12 @@ ROUT PROC FAR		; resident interuption handler
 		mov KEEP_SS,SS
 		mov AX, seg ROUT_STACK
 		mov SS, AX
-		mov SP, offset stack_ptr
+		mov SP, offset stack_top
 	
 		push AX
 		push BX
 		push CX
 		push DX
-
 
 		call getCurs
 		push DX		
@@ -128,14 +123,14 @@ ROUT PROC FAR		; resident interuption handler
 		call setCurs
 		
 		push DS
-		mov AX,seg COUNTER
-		mov DS,AX
-		mov AX,COUNTER
+		mov AX, seg COUNTER
+		mov DS, AX
+		mov AX, COUNTER
 		inc AX
-		mov COUNTER,AX
+		mov COUNTER, AX
 		
 		push DI
-		mov DI,offset COUNT_MESSAGE
+		mov DI, offset COUNT_MESSAGE
 		add DI,17
 		call WRD_TO_HEX
 		pop DI
@@ -143,9 +138,9 @@ ROUT PROC FAR		; resident interuption handler
 		
 		push ES
 		push BP
-		mov AX,seg COUNT_MESSAGE
-		mov ES,AX
-		mov BP,offset COUNT_MESSAGE
+		mov AX, seg COUNT_MESSAGE
+		mov ES, AX
+		mov BP, offset COUNT_MESSAGE
 		call outputBP
 		
 		pop BP
@@ -202,8 +197,8 @@ RECOVER_HANDLER PROC NEAR
 		push dx
 		push ds
 		
-		mov DX,ES:KEEP_IP
-		mov AX,ES:KEEP_CS
+		mov DX, ES:KEEP_IP
+		mov AX, ES:KEEP_CS
 		mov ds, ax
 		call SET_HANDLER
 
@@ -226,12 +221,11 @@ KEEP PROC NEAR
 		mov dx, offset END_OF_RESIDENT
 		mov cl, 4
 		shr dx, cl
-		add dx, 14h		; 10h paragraphs for PSP and 4 for stack
+		add dx, 10h		; 10h paragraphs (256 bytes) for PSP
 		inc dx			; round up
 		mov ah, 31h
 		mov al, 0h
 		int 21h
-		
 	    ret
 KEEP ENDP
 
@@ -270,33 +264,20 @@ unload_handler proc near
 		mov ah, 35h
 		mov al, 1ch
 		int 21h			; es:bx = custom handler
-		cli
-		
 
 		call RECOVER_HANDLER	; RECOVER_HANDLER default handler
-		;Освобождение памяти резидента:
-		mov SI, offset KEEP_PSP
-		mov AX, ES:[SI]
-		mov ES,AX
 		
+		mov SI, offset KEEP_PSP
+		mov ES, ES:[SI]
 		
 		PUSH ES
-		MOV ES, ES:2CH
+		MOV ES, ES:[2Ch]
 		MOV AH, 49H
-		INT 21H ; освобождение блока памяти
+		INT 21H 				; free environment variable scope
 		POP ES
 		MOV AH, 49H
-		INT 21H ; освобождение блока памяти
+		INT 21H 				; environment resident scope
 
-		sti
-
-		;Завершение программы:
-		mov DX,offset UNLOAD_MESSAGE
-		call OUTPUT_PROC
-		mov AX,4C00h
-		int 21h
-			
-		
 		ret
 unload_handler endp
 
@@ -316,16 +297,20 @@ MAIN PROC FAR
 		
 unload:
 		call check_handler
-		jne unloaded
+		jne not_loaded
 		call unload_handler
-		unloaded:
-		lea dx, UNLOAD_MESSAGE
+		mov DX,offset UNLOADED_MESSAGE
+		call OUTPUT_PROC
+		jmp exit_main
+		
+not_loaded:
+		lea dx, NOT_LOADED_MESSAGE
 		call OUTPUT_PROC				; print message
 		jmp exit_main
 
 load:
-		mov ax, ss
-		sub ax, 16
+		mov ax, cs
+		sub ax, 010h 					; psp
 		mov KEEP_PSP, ax
 		call KEEP_HANDLER
 		mov DX,	offset ROUT
@@ -337,6 +322,7 @@ load:
 		lea dx, HANDLER_HAD_BEEN_SET_MESSAGE
 		call OUTPUT_PROC
 		call KEEP						; exit
+
 exit_main:
 		mov ah,4Ch
 		int 21h
@@ -344,13 +330,18 @@ exit_main:
 MAIN ENDP
 CODE ENDS
 
+AStack SEGMENT STACK
+		dw 16 dup (?)
+AStack ENDS
+
 DATA SEGMENT
 		HANDLER_IS_ALREADY_SET_MESSAGE	db 'Custom interrupt handler is already set', '$'
 		HANDLER_HAD_BEEN_SET_MESSAGE	db 'Custom interrupt handler had been set', '$'
-		UNLOAD_MESSAGE			db 'Handler is unloaded', '$'
-		SIGNATURE_CHECK			db 'Losev$'
-		UNLOAD_COMMAND			db ' /un'
-		SEG_STR					db '0000$'
+		UNLOADED_MESSAGE					db 'Handler is unloaded', '$'
+		NOT_LOADED_MESSAGE				db 'Handler is not loaded', '$'
+		SIGNATURE_CHECK					db 'Losev$'
+		UNLOAD_COMMAND					db ' /un'
+		SEG_STR							db '0000$'
 DATA ENDS 
 
 END MAIN
